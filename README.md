@@ -12,33 +12,26 @@ Proyecto de microservicios para HuertoHogar, tienda online de productos del camp
 
 ## Microservicios desarrollados
 
-### usuario-microservicio
-Registro, login y gestión de usuarios con autenticación JWT.
+### usuario-service
+Gestión de usuarios, autenticación y autorización con JWT.
 
 - Puerto: 8082
 - Base de datos: huertohogar_usuarios
 - Estado: En desarrollo
 
-### producto-microservicio
-Manejo de productos y categorías del catálogo.
+### producto-service
+Gestión de productos y categorías del catálogo.
 
 - Puerto: 8081
 - Base de datos: huertohogar_productos
-- Estado: Por desarrollar
+- Estado: En desarrollo
 
-### pedido-microservicio
-Creación y seguimiento de pedidos.
-
-- Puerto: 8083
-- Base de datos: huertohogar_pedidos
-- Estado: Por desarrollar
-
-### carrito-microservicio
+### carrito-service
 Gestión del carrito de compras.
 
 - Puerto: 8084
 - Base de datos: huertohogar_carritos
-- Estado: Por desarrollar
+- Estado: En desarrollo
 
 ---
 
