@@ -1,0 +1,6 @@
+# Dockerfile temporal - usa JAR pre-compilado
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY target/carrito-service-1.0.5.jar app.jar
+EXPOSE 8083
+ENTRYPOINT ["java", "-jar", "app.jar"]

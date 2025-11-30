@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   mysqldb:
@@ -62,7 +62,8 @@ services:
       - SPRING_DATASOURCE_PASSWORD=1234
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID}
     networks:
       - huertohogar-network
     deploy:
@@ -70,6 +71,17 @@ services:
       update_config:
         parallelism: 1
         delay: 10s
+      restart_policy:
+        condition: on-failure
+
+  api-gateway:
+    image: nachovn114/huertohogar-gateway:latest
+    ports:
+      - "8080:8080"
+    networks:
+      - huertohogar-network
+    deploy:
+      replicas: 1
       restart_policy:
         condition: on-failure
 

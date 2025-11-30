@@ -1,5 +1,6 @@
 import json
 import logging
+import boto3
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -17,8 +18,9 @@ def lambda_handler(event, context):
 
             # Extrae el ID del pedido para registrarlo.
             order_id = message_body.get('orderId', 'N/A')
+            email = message_body.get('email', 'N/A')
 
-            logger.info(f"Procesando pedido: {order_id}")
+            logger.info(f"Procesando pedido: {order_id} para {email}")
 
         except Exception as e:
             logger.error(f"❌ Error al procesar el mensaje: {e}")

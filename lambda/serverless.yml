@@ -1,0 +1,32 @@
+service: huertohogar-lambda
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: us-east-1
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource:
+            - "arn:aws:sqs:us-east-1:*:HuertoHogar-Orders"
+
+functions:
+  processOrder:
+    handler: lambda_function.lambda_handler
+    events:
+      - sqs:
+          arn:
+            Fn::Join:
+              - ":"
+              - - arn
+                - aws
+                - sqs
+                - us-east-1
+                - Ref: AWS::AccountId
+                - HuertoHogar-Orders
+          batchSize: 1

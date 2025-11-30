@@ -1,0 +1,110 @@
+name: Deploy Pipeline
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Obtener código
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # 2. Configurar Java
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: "maven"
+
+      # 3. Configurar Credenciales AWS (Incluyendo Session Token para Academy)
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      # 4. Crear Recursos Cloud (SQS)
+      - name: Setup AWS Resources
+        run: |
+          chmod +x ./scripts/create-aws-resources.sh
+          ./scripts/create-aws-resources.sh
+
+      # 5. Build de TODOS los Microservicios (Maven)
+      - name: Build Usuarios MS
+        run: |
+          cd usuarios-microservice
+          mvn clean package -DskipTests
+
+      - name: Build Core MS
+        run: |
+          cd core-microservice
+          mvn clean package -DskipTests
+
+      - name: Build API Gateway
+        run: |
+          cd api-gateway
+          mvn clean package -DskipTests
+
+      - name: Build Carrito MS
+        run: |
+          cd carrito-microservice
+          mvn clean package -DskipTests
+
+      # 6. Login Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 7. Build & Push Docker Images (Para todos)
+      # Nota: Asumimos que cada carpeta tiene su Dockerfile. Si no, ajusta según corresponda.
+
+      - name: Push Usuarios Image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./usuarios-microservice
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/huertohogar-usuarios:latest
+
+      - name: Push Core Image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./core-microservice
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/huertohogar-core:latest
+
+      - name: Push Gateway Image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./api-gateway
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/huertohogar-gateway:latest
+
+      - name: Push Carrito Image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./carrito-microservice
+          file: ./carrito-microservice/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/huertohogar-carrito:latest
+
+      # 8. Despliegue a AWS EC2 (SSH)
+      - name: Deploy to AWS EC2
+        uses: appleboy/ssh-action@master
+        if: ${{ secrets.EC2_HOST != '' }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu # Cambiar a 'ec2-user' si usas Amazon Linux
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Actualizando servicios en Swarm..."
+            docker service update --image ${{ secrets.DOCKERHUB_USERNAME }}/huertohogar-usuarios:latest huertohogar_usuarios-ms
+            docker service update --image ${{ secrets.DOCKERHUB_USERNAME }}/huertohogar-core:latest huertohogar_core-ms
+            docker service update --image ${{ secrets.DOCKERHUB_USERNAME }}/huertohogar-gateway:latest huertohogar_api-gateway
+            docker service update --image ${{ secrets.DOCKERHUB_USERNAME }}/huertohogar-carrito:latest huertohogar_carrito-ms

@@ -1,47 +1,67 @@
 #!/bin/bash
-#
-# Script que simula el flujo completo de HuertoHogar (End-to-End Demo).
-# Demuestra la integración de Microservicios -> SQS -> Lambda.
-#
-# ----------------------------------------------------------------------
-# CONFIGURACIÓN: REEMPLAZAR ANTES DE USAR
-# ----------------------------------------------------------------------
-API_GATEWAY_URL="https://[REEMPLAZAR_CON_TU_ID_API_GATEWAY].execute-api.us-east-1.amazonaws.com/prod"
+# Script de Demostración End-to-End para HuertoHogar
+# Ejecutar en Git Bash o terminal Linux/Mac
+
+# Configuración
+API_URL="http://localhost:8080"
+LAMBDA_FUNCTION_NAME="huertohogar-lambda-dev-processOrder" # Nombre por defecto de Serverless Framework
 REGION="us-east-1"
-LAMBDA_FUNCTION_NAME="HuertoHogar-ProcessOrder"
 
-# Variables dinámicas para el pedido
-ORDER_ID="ORDER-$(date +%s)"
-USER_EMAIL="test-user-${ORDER_ID}@huertohogar.com"
+echo "==========================================================="
+echo "   PRUEBA END-TO-END HUERTOHOGAR (Local Swarm + AWS)"
+echo "==========================================================="
 
-# ----------------------------------------------------------------------
-echo "--- 1. PREPARACIÓN: OBTENER TOKEN DE AUTENTICACIÓN ---"
-# PENDIENTE: Aquí irían los comandos para obtener el JWT del API Gateway.
-JWT_TOKEN="[TOKEN_DE_PRUEBA_GENERADO_POR_LOGIN]"
-
-if [ -z "$JWT_TOKEN" ]; then
-    echo "❌ ERROR: JWT_TOKEN no generado. No se puede continuar."
-    exit 1
+# 1. Verificar que el API Gateway responde
+echo ""
+echo "--- 1. Verificando estado del API Gateway ---"
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" $API_URL/actuator/health)
+# Si no tienes actuator, probamos un endpoint de usuarios
+if [ "$HTTP_CODE" != "200" ]; then
+    echo "⚠️  API Gateway no responde en /actuator/health (Código: $HTTP_CODE). Probando /usuarios..."
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" $API_URL/usuarios)
 fi
 
-# ----------------------------------------------------------------------
-echo "--- 2. CREAR Y CONFIRMAR PEDIDO (Activa Productor SQS) ---"
-# El carrito-microservice actúa como PRODUCTOR al confirmar, enviando a SQS.
+echo "Estado API: $HTTP_CODE"
 
-echo "Enviando confirmación del pedido ${ORDER_ID}..."
+# 2. Crear un Carrito (Simulado)
+echo ""
+echo "--- 2. Creando un Carrito de Compra ---"
+# Asumimos que el endpoint POST /carritos crea un carrito vacío
+CARRITO_RESPONSE=$(curl -s -X POST $API_URL/carritos \
+  -H "Content-Type: application/json" \
+  -d '{"usuarioId": 1}')
 
-# PENDIENTE: Aquí iría el comando cURL que llama al endpoint /carritos/confirmar
-#            Usando el $JWT_TOKEN para autenticación.
+echo "Respuesta: $CARRITO_RESPONSE"
+# Extraer ID del carrito (usando grep/sed básico si no hay jq)
+CARRITO_ID=$(echo $CARRITO_RESPONSE | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
 
-echo "Mensaje de pedido enviado a la cola SQS."
-sleep 5 # Esperar 5 segundos para que Lambda tenga tiempo de procesar.
+if [ -z "$CARRITO_ID" ]; then
+    echo "⚠️  No se pudo obtener ID del carrito. Usando ID de prueba '1'."
+    CARRITO_ID=1
+else
+    echo "✅ Carrito creado con ID: $CARRITO_ID"
+fi
 
-# ----------------------------------------------------------------------
-echo "--- 3. VERIFICAR PROCESAMIENTO EN LOGS DE CLOUDWATCH ---"
-# La función Lambda (CONSUMIDOR) procesa el mensaje de SQS.
+# 3. Confirmar Compra (Dispara SQS)
+echo ""
+echo "--- 3. Confirmando Compra (Trigger SQS) ---"
+echo "Enviando petición POST a $API_URL/carritos/$CARRITO_ID/confirmar ..."
 
-echo "Buscando logs de Lambda para el pedido ${ORDER_ID}..."
-# Comando para ver los logs de la función Lambda usando AWS CLI.
-aws logs tail /aws/lambda/${LAMBDA_FUNCTION_NAME} --region ${REGION} --follow --since 1m
+CONFIRM_RESPONSE=$(curl -s -X POST "$API_URL/carritos/$CARRITO_ID/confirmar")
+echo "Respuesta del Servidor: $CONFIRM_RESPONSE"
 
-echo "✅ Demostración completada."
+# 4. Verificar en AWS (Logs de Lambda)
+echo ""
+echo "--- 4. Verificando procesamiento en AWS Lambda ---"
+echo "Esperando 10 segundos para que Lambda procese el mensaje..."
+sleep 10
+
+echo "Consultando logs recientes de CloudWatch para la función: $LAMBDA_FUNCTION_NAME"
+# Intentamos obtener los logs. Si falla, es probable que falten credenciales o el nombre sea distinto.
+aws logs tail "/aws/lambda/$LAMBDA_FUNCTION_NAME" --region $REGION --since 5m
+
+echo ""
+echo "==========================================================="
+echo "   PRUEBA FINALIZADA"
+echo "==========================================================="
+echo "Si viste el log 'Procesando pedido', ¡la integración funciona!"
