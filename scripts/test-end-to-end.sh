@@ -1,27 +1,14 @@
 #!/bin/bash
-#
-# Script de prueba básica de accesibilidad (End-to-End Test)
-# Objetivo: Verificar que la URL base del API Gateway está respondiendo,
-#           confirmando que la infraestructura está online.
-#
+BASE_URL="http://localhost:8083/api/carritos"
 
-# ----------------------------------------------------------------------
-# CONFIGURACIÓN: REEMPLAZAR ANTES DE USAR
-# ----------------------------------------------------------------------
-API_URL="https://[REEMPLAZAR_CON_TU_ID_API_GATEWAY].execute-api.us-east-1.amazonaws.com/prod"
+echo "Creando carrito..."
+# Requiere jq instalado
+ID=$(curl -s -X POST $BASE_URL -H "Content-Type: application/json" -d '{"usuarioId":1}' | jq -r .id)
+echo "Carrito ID: $ID"
 
-echo "--- 1. VERIFICANDO ACCESIBILIDAD DEL API GATEWAY ---"
+echo "Agregando item..."
+curl -s -X POST "$BASE_URL/$ID/items" -H "Content-Type: application/json" -d '{"productoId":101,"cantidad":2}' > /dev/null
 
-# Intentamos acceder a un endpoint base que no debería requerir autenticación (si existe).
-# Reemplazar '/usuarios/health' por el endpoint de salud de tu equipo, si es diferente.
-RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${API_URL}/usuarios/health")
-
-if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 403 ] || [ "$RESPONSE" -eq 401 ]; then
-    echo "✅ ÉXITO: El API Gateway está respondiendo (Código: $RESPONSE)."
-    echo "   (Se espera 200 o 401/403 si el endpoint está protegido.)"
-else
-    echo "❌ ERROR: El API Gateway NO responde correctamente (Código: $RESPONSE)."
-    echo "   Verificar la URL base y el estado del despliegue."
-fi
-
-echo "--- 2. PRUEBAS FINALIZADAS ---"
+echo "Confirmando compra..."
+curl -s -X POST "$BASE_URL/confirmar/$ID"
+echo -e "\nListo."
