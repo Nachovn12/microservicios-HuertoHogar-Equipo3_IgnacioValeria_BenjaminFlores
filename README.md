@@ -1,155 +1,127 @@
 # Microservicios HuertoHogar
 
-Este proyecto implementa el backend de HuertoHogar, una tienda online de productos del campo, usando arquitectura de microservicios y Docker Swarm para alta disponibilidad y escalabilidad.
+Este proyecto implementa el backend de HuertoHogar, una tienda online de productos del campo, utilizando una arquitectura de microservicios moderna, contenerizada con Docker Swarm, orquestada con CI/CD y potenciada por servicios Cloud de AWS (SQS y Lambda).
 
 **Equipo 3:**
+
 - Ignacio Valeria
 - Benjamín Flores
 
 ---
 
-## Descripción general
+## 🏗️ Arquitectura del Sistema
 
-El sistema está compuesto por tres microservicios independientes:
-- **usuarios-microservice:** Gestión y autenticación de usuarios (JWT). Puerto 8081.
-- **core-microservice:** Gestión de productos y categorías. Puerto 8082.
-- **carrito-microservice:** Gestión de carritos de compra asociados a usuarios. Puerto 8083.
+El sistema está compuesto por los siguientes componentes distribuidos:
 
-Cada microservicio tiene su propia base de datos en MySQL y su propio README con ejemplos de endpoints.
+### Microservicios (Spring Boot)
+
+- **api-gateway:** Puerta de entrada única (Spring Cloud Gateway). Puerto **8080**.
+- **usuarios-microservice:** Gestión y autenticación de usuarios (JWT). Puerto Interno 8081.
+- **core-microservice:** Catálogo de productos y categorías. Puerto Interno 8082.
+- **carrito-microservice:** Gestión de compras y pedidos. Puerto Interno 8083.
+  - _Productor SQS:_ Envía mensajes de confirmación de pedido a la nube.
+
+### Servicios Cloud (AWS)
+
+- **Amazon SQS:** Cola de mensajes (`HuertoHogar-Orders`) para desacoplar el proceso de compra.
+- **AWS Lambda:** Función Serverless (Python) que consume mensajes de la cola y procesa los pedidos asíncronamente.
+
+### Base de Datos
+
+- **MySQL 8.0:** Contenedor único con bases de datos separadas por microservicio (`huertohogar_usuarios`, `huertohogar_productos`, `huertohogar_carritos`).
 
 ---
 
-## Tecnologías utilizadas
+## 🚀 Tecnologías Utilizadas
 
-- Java 17
-- Spring Boot 3.1.5
-- Spring Data JPA
-- MySQL 8.0
-- Maven
-- Lombok
-- Docker & Docker Swarm
+- **Backend:** Java 17, Spring Boot 3.1.5, Spring Data JPA, Spring Cloud Gateway.
+- **Base de Datos:** MySQL 8.0.
+- **Contenedores:** Docker, Docker Swarm (Orquestación).
+- **Cloud:** AWS SDK (SQS), AWS Lambda (Serverless).
+- **CI/CD:** GitHub Actions (Pipeline automatizado de Build, Test y Deploy).
+- **Herramientas:** Maven, Lombok, Postman.
 
 ---
 
-## Estructura del proyecto
+## 📂 Estructura del Proyecto
 
 ```
 microservicios-HuertoHogar/
-├── core-microservice/
-├── usuarios-microservice/
-├── carrito-microservice/
-├── docker-compose.yml
-├── docker-compose.swarm.yml
-├── init.sql
-├── docs/
-│   └── SWARM-COMMANDS.md
+├── api-gateway/            # Gateway principal
+├── core-microservice/      # Catálogo de productos
+├── usuarios-microservice/  # Autenticación
+├── carrito-microservice/   # Compras y SQS Producer
+├── lambda/                 # Función Serverless (Python)
+├── scripts/                # Scripts de utilidad (Testing, AWS)
+├── .github/workflows/      # Pipelines de CI/CD
+├── docker-compose.swarm.yml # Definición del Stack para Producción
 └── README.md
 ```
 
 ---
 
-## Scripts de prueba
+## ⚙️ Despliegue y Ejecución
 
-Cada microservicio incluye un script SQL con datos de prueba en `src/main/resources`:
-- `insert_carritos_prueba.sql`
-- `insert_productos_prueba.sql`
-- `insert_usuarios_prueba.sql`
+### 1. Requisitos Previos
 
-Ejecute estos scripts en la base de datos correspondiente para cargar datos de ejemplo.
+- Docker y Docker Compose instalados.
+- Cuenta de AWS (para SQS/Lambda) con credenciales configuradas.
+- Java 17 y Maven (opcional si se usa Docker).
 
----
+### 2. Despliegue en Docker Swarm (Producción)
 
-## Despliegue local (desarrollo)
+El proyecto está diseñado para correr en un clúster Swarm.
 
-1. **Clonar el repositorio**
+1. **Inicializar Swarm:**
+
    ```bash
-   git clone https://github.com/Nachovn12/microservicios-HuertoHogar-Equipo3_IgnacioValeria_BenjaminFlores.git
-   cd microservicios-HuertoHogar-Equipo3_IgnacioValeria_BenjaminFlores
+   docker swarm init
    ```
 
-2. **Crear las bases de datos**
-   Abre tu cliente MySQL y ejecuta:
-   ```sql
-   CREATE DATABASE huertohogar_usuarios;
-   CREATE DATABASE huertohogar_productos;
-   CREATE DATABASE huertohogar_carritos;
-   ```
+2. **Configurar Credenciales:**
+   Crear un archivo `.env` con las credenciales de AWS y DB (ver `docker-compose.swarm.yml` para variables requeridas).
 
-3. **Configurar cada microservicio**
-   - Edita `application.properties` en cada microservicio con tus datos de MySQL.
-   - Cambia el puerto si está ocupado.
+3. **Desplegar el Stack:**
 
-4. **Compilar y ejecutar un microservicio**
-   ```bash
-   cd <nombre-del-microservicio>
-   mvn clean install
-   mvn spring-boot:run
-   ```
-   El microservicio estará disponible en el puerto configurado.
-
----
-
-## Despliegue en Docker Swarm (producción)
-
-Para producción y alta disponibilidad, implementamos Docker Swarm. Esto permite escalar los microservicios y gestionar múltiples nodos (manager y workers).
-
-### ¿Cómo está implementado?
-
-- Cada microservicio se empaqueta como imagen Docker y se publica en Docker Hub:
-  - [Usuarios](https://hub.docker.com/r/nachovn114/huertohogar-usuarios)
-  - [Core/Productos](https://hub.docker.com/r/nachovn114/huertohogar-core)
-  - [Carrito](https://hub.docker.com/r/nachovn114/huertohogar-carrito)
-- El archivo `docker-compose.swarm.yml` define los servicios, replicas, redes y variables de entorno para Swarm.
-- El servicio MySQL se ejecuta solo en el nodo manager y persiste los datos con volúmenes.
-- Cada microservicio se conecta a la base de datos usando el nombre del servicio (`mysqldb`) como host.
-- El despliegue se realiza con el comando:
-  ```bash
-  docker stack deploy -c docker-compose.swarm.yml huertohogar
-  ```
-- Los comandos esenciales para administrar el clúster están documentados en [`docs/SWARM-COMMANDS.md`](docs/SWARM-COMMANDS.md).
-
-### Ejemplo de despliegue y escalado
-
-1. Inicializar Swarm en el manager:
-   ```bash
-   docker swarm init --advertise-addr IP_PRIVADA_MANAGER
-   ```
-2. Agregar workers con el token generado.
-3. Desplegar el stack:
    ```bash
    docker stack deploy -c docker-compose.swarm.yml huertohogar
    ```
-4. Escalar servicios:
+
+4. **Escalar Servicios:**
    ```bash
-   docker service scale huertohogar_core-ms=3
-   ```
-5. Ver logs y estado de los servicios:
-   ```bash
-   docker service ls
-   docker service logs huertohogar_usuarios-ms
+   docker service scale huertohogar_carrito-ms=3
    ```
 
----
+### 3. Pipeline de CI/CD
 
-## Ventajas de la arquitectura
+El proyecto cuenta con un pipeline automatizado en GitHub Actions (`.github/workflows/deploy.yml`) que:
 
-- Permite alta disponibilidad y escalabilidad.
-- Cada microservicio es independiente y puede actualizarse sin afectar a los demás.
-- El uso de Docker Hub facilita la integración con CI/CD y despliegue automatizado.
-- La documentación y scripts permiten que cualquier miembro del equipo o evaluador pueda replicar el entorno fácilmente.
-
----
-
-## Enlaces útiles
-
-- [Repositorio en GitHub](https://github.com/Nachovn12/microservicios-HuertoHogar-Equipo3_IgnacioValeria_BenjaminFlores)
-- [Imágenes en Docker Hub](https://hub.docker.com/u/nachovn114)
-- [Documentación de comandos Swarm](docs/SWARM-COMMANDS.md)
+1. Compila todos los microservicios (Maven).
+2. Construye imágenes Docker optimizadas (Multi-stage).
+3. Sube las imágenes a Docker Hub.
+4. Despliega automáticamente a AWS (si se configura EC2).
+5. Aprovisiona recursos Cloud (Cola SQS) automáticamente.
 
 ---
 
-## Problemas comunes y soluciones
+## 🧪 Pruebas End-to-End
 
-- **Puerto ocupado:** Cambia el puerto en `application.properties`.
-- **Error de conexión a MySQL:** Revisa usuario y contraseña en `application.properties`.
-- **No compila:** Borra la carpeta `target/` y vuelve a hacer `mvn clean install`.
+Para validar el flujo completo (Compra -> API -> Microservicio -> SQS -> Lambda), utilice el script de prueba incluido:
+
+```powershell
+./scripts/test-end-to-end.ps1
+```
+
+Este script:
+
+1. Crea un carrito.
+2. Agrega productos.
+3. Confirma la compra.
+4. Verifica la respuesta exitosa del backend.
+
+---
+
+## 🔗 Enlaces
+
+- [Repositorio GitHub](https://github.com/Nachovn12/microservicios-HuertoHogar-Equipo3_IgnacioValeria_BenjaminFlores)
+- [Docker Hub (Imágenes)](https://hub.docker.com/u/nachovn114)
